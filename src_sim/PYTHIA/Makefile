@@ -62,6 +62,16 @@ else
 	$(error Error: $@ requires ROOT and FASTJET3)
 endif
 
+# ROOT with FastJet.
+# Probably can include but I don't really know makefile so this will do for now
+eventgen_feasibility: $(PYTHIA) $$@.cc
+ifeq ($(ROOT_USE)$(FASTJET3_USE),truetrue)
+	$(CXX) $@.cc -o $@ -w $(CXX_COMMON) $(FASTJET3_INCLUDE)\
+         $(FASTJET3_LIB) $(ROOT_LIB) $(shell $(ROOT_CONFIG) --cflags --glibs)
+else	
+	$(error Error: $@ requires ROOT and FASTJET3)
+endif
+
 # Clean.
 clean:
 	@rm -f main[0-9][0-9]; rm -f out[0-9][0-9];\
