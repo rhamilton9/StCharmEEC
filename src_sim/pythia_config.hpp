@@ -19,6 +19,12 @@
 #include "TLine.h"
 #include "TTree.h"
 #include "TTreeReader.h"
+#include "../utils/root_draw_tools.h"
+
+// Constants
+const double pion_mass = 0.13957039;
+
+
 
 // STAR Kinematics
 //const Int_t nevent_perbin[11] = {1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
@@ -73,5 +79,22 @@ const Double_t max_eta = 1;
 // Note -- this is the track particle eta cut.
 // Jet eta thresholds are calculated based on the jet radius to ensure
 // all jet constituents are within the track thresholds.
+
+
+// --------------------------------------------- Aesthetic settings
+
+Int_t plot_colors[5] = {
+  getTColorFromHex("#5790fc"),
+  getTColorFromHex("#e42536"),
+  getTColorFromHex("#189c20"),
+  getTColorFromHex("#9c9ca1"),
+  getTColorFromHex("#ec6672")
+};
+
+Int_t color_accent1[3] = {
+  getTColorFromHex("#E23813"),
+  getTColorFromHex("#AA3218"),
+  getTColorFromHex("#E7B0A5")
+};
 
 #endif /* config_hpp */
