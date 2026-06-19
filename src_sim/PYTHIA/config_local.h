@@ -96,8 +96,8 @@ const double min_area = .0*3.14159*jet_radius*jet_radius;
 
 // Jet/jet constituents and pT cuts for jet clustering.
 const double pTmin_jetcore = 0;         // Minumum pT of the leading hadron in the jet
-const double jetcut_minpT_full = 20;    // in GeV
-const double jetcut_minpT_chrg = 20;    // in GeV
+const double jetcut_minpT_full = 5;    // in GeV
+const double jetcut_minpT_chrg = 5;    // in GeV
 const double D0_minpT = 0;              // in GeV
 // Note on general values for these parameters:
 //    Generally 10 GeV is a good cut for jets to remove many softer gluon jets

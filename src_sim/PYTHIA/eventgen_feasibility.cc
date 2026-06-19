@@ -54,17 +54,19 @@ const bool debug = false;
 const double pion_mass = 0.13957039;
 
 // Use a restricted pThat range for this feasibility study which should be reasonable!
-double pt_binedge[2] = {15, 35};     // pThat range to generate hard scatterings in PYTHIA
-double EEC_pt_binedge[2] = {20, 30}; // pT range of final clustered jets to store in the EEC histograms
+double pt_binedge[2] = {0, -1};     // pThat range to generate hard scatterings in PYTHIA
+double EEC_pt_binedge[2] = {5, 50}; // pT range of final clustered jets to store in the EEC histograms
 double cross_section = 3.98029761e-4;
-int nevent = 1000;
+int nevent = 1000000;
 
+
+bool ghost_grid_area = false;
 
 // Energy correlator settings
 int nbin_EEC = 100;
 double EEC_range[2] = {2e-4, 7e-1};
 
-
+ 
 
 // Define a user class for info associated with pseudojets
 class LocalInfo: public fastjet::PseudoJet::UserInfoBase {
@@ -253,6 +255,13 @@ int main(int argc, char *argv[]) {
     ";#eta;#phi;1/N^{event} d^{2}N^{constituent}/d#etad#phi"
   };
   
+  TH1D* hist_pT_jet[2];
+  hist_pT_jet[0] = new TH1D(Form("hist_fulljetpt_ptbin%.f-%.f",pt_binedge[0],pt_binedge[1]),
+                            ";#it{p}_{T} [GeV];dN^{jet}/d#it{p}_{T}", 100, 0, 100);
+  hist_pT_jet[1] = new TH1D(Form("hist_charjetpt_ptbin%.f-%.f",pt_binedge[0],pt_binedge[1]),
+                            ";#it{p}_{T} [GeV];dN^{ch. jet}/d#it{p}_{T}", 100, 0, 100);
+  
+  
   TH1D* hist_pT[n_particle_type];
   TH2D* hist_2D[2][n_particle_type];
   for (int i_particle_type = 0; i_particle_type < n_particle_type; ++i_particle_type) {
@@ -278,8 +287,10 @@ int main(int argc, char *argv[]) {
   TH1D* hist_event_jetmult[3];
   TH1D* hist_fulljet_constituents[3];
   TH1D* hist_charjet_constituents[3];
-  TH1D* EEC_fulljet[3];
-  TH1D* EEC_charjet[3];
+  TH2D* EEC_fulljet[3];
+  TH2D* EEC_charjet[3];
+  TH1D* EEC_fulljet_proj[3];
+  TH1D* EEC_charjet_proj[3];
   char D0tag_string[3][20] = {"inclusive","D0tagged","nocharm"};
   for (int i = 0; i < 3; ++i) {
     // Jet multiplicity for each event, important to know how many jets there are
@@ -296,14 +307,25 @@ int main(int argc, char *argv[]) {
     
     
     // EEC--use log uniform binning
-    EEC_fulljet[i] = new TH1D(Form("EEC_fulljet_ptbin%.f-%.f_%s",EEC_pt_binedge[0],EEC_pt_binedge[1],D0tag_string[i]),
-                              ";R_{L};d#Sigma^{Full Incl.}/dR_{L}",
-                              nbin_EEC, EEC_binedge.data());
-    EEC_charjet[i] = new TH1D(Form("EEC_charjet_ptbin%.f-%.f_%s",EEC_pt_binedge[0],EEC_pt_binedge[1],D0tag_string[i]),
-                              ";R_{L};d#Sigma^{Charged Incl.}/dR_{L}",
-                              nbin_EEC, EEC_binedge.data());
+    EEC_fulljet[i] = new TH2D(Form("EEC_fulljet_ptbin%.f-%.f_%s",EEC_pt_binedge[0],EEC_pt_binedge[1],D0tag_string[i]),
+                              ";R_{L};Full Jet p_{T} [GeV];d#Sigma^{Full Incl.}/dR_{L}",
+                              nbin_EEC, EEC_binedge.data(), 45, 5, 50);
+    EEC_charjet[i] = new TH2D(Form("EEC_charjet_ptbin%.f-%.f_%s",EEC_pt_binedge[0],EEC_pt_binedge[1],D0tag_string[i]),
+                              ";R_{L};Charged+D^{0} Jet p_{T} [GeV];d#Sigma^{Charged Incl.}/dR_{L}",
+                              nbin_EEC, EEC_binedge.data(), 45, 5, 50);
+    EEC_fulljet_proj[i] = new TH1D(Form("EEC_fulljet_ptbin%.f-%.f_%s_proj",EEC_pt_binedge[0],EEC_pt_binedge[1],D0tag_string[i]),
+                                   ";R_{L};Full Jet p_{T} [GeV];d#Sigma^{Full Incl.}/dR_{L}",
+                                   nbin_EEC, EEC_binedge.data());
+    EEC_charjet_proj[i] = new TH1D(Form("EEC_charjet_ptbin%.f-%.f_%s_proj",EEC_pt_binedge[0],EEC_pt_binedge[1],D0tag_string[i]),
+                                   ";R_{L};Charged+D^{0} Jet p_{T} [GeV];d#Sigma^{Charged Incl.}/dR_{L}",
+                                   nbin_EEC, EEC_binedge.data());
   }// End of D0-tagged hist construction
   
+  
+  // Set up hist to keep track of D0 tagged jet pT alongside D0 pT
+  // This helps us get a sense for how the D0 pT and jet pT are related
+  TH2D* histJetDMesonMomentum = new TH2D("histJetDMesonMomentum",";Charged+D^{0} Jet p_{T} [GeV];D^{0} p_{T} [GeV];",
+                                         55, -5, 50, 50, 0, 25);
   
   
   // Setup jet definiton for fastjet
@@ -338,7 +360,7 @@ int main(int argc, char *argv[]) {
   TString plotfile = Form("out_plots/%s/%s_eventdisplay_ptbin%.f-%.f-thread%i.pdf",
                           gen_info_string,gen_info_string,pt_binedge[0],pt_binedge[1],this_thread);
   canvas->Print(plotfile + "[");
-  
+  int plot_count = 0;
   
   //========================================================================== Start of event loop
   
@@ -390,11 +412,11 @@ int main(int argc, char *argv[]) {
       if (std::abs(p.id()) == 5) ++pbeauty;
     }
     if (pcharm > 0) {
-      std::cout << pcharm << " charm quarks in process " << process << "!" << std::endl;
+//      std::cout << pcharm << " charm quarks in process " << process << "!" << std::endl;
       if (process >= 113 && process <= 115) count_charm_in_gq[process-113] += pcharm/2; // due to flavor conservation
     }
     if (pbeauty > 0) {
-      std::cout << pbeauty << " beauty quarks in process " << process << "!" << std::endl;
+//      std::cout << pbeauty << " beauty quarks in process " << process << "!" << std::endl;
       if (process >= 113 && process <= 115) count_beauty_in_gq[process-113] += pbeauty/2; // due to flavor conservation
     }
     
@@ -430,7 +452,8 @@ int main(int argc, char *argv[]) {
       if (std::abs(p.id()) == 421) {
         if (p.pT() < D0_minpT) continue;
         ++count_D0;
-        std::cout << "Push back valid final state D0!" << std::endl;
+//        std::cout << "Push back valid final state D0!" << std::endl;
+        reco_D0.push_back(p);
       } else if (cEvent[i].pT() < pTmin_hadron) continue; // Other hadrons
       
       // Append to particle vector for jet clustering
@@ -455,17 +478,19 @@ int main(int argc, char *argv[]) {
     // Make a grid of ghost particles, add them to the stack
     // This is necessary to find the jet area, defined as the grid
     // area of ghost particles that are clustered into a jet.
-    fastjet::PseudoJet ghost;
     double ghost_pt = 1e-100;
-    for (int ir = 1; ir <= nbins_rap_display; ++ir) {
-      // For massless particles like ghosts, rapidity = pseudorapidity
-      double longitude = jet_diagram2D->GetXaxis()->GetBinCenter(ir);
-      for (int iphi = 1; iphi <= nbins_phi_display; ++iphi) {
-        double phi = jet_diagram2D->GetYaxis()->GetBinCenter(iphi);
-        ghost.reset_momentum_PtYPhiM(ghost_pt, longitude, phi, 0);
-        stable_particles.push_back(ghost);
-      }
-    }// End of ghost loop
+    if (ghost_grid_area) {
+      fastjet::PseudoJet ghost;
+      for (int ir = 1; ir <= nbins_rap_display; ++ir) {
+        // For massless particles like ghosts, rapidity = pseudorapidity
+        double longitude = jet_diagram2D->GetXaxis()->GetBinCenter(ir);
+        for (int iphi = 1; iphi <= nbins_phi_display; ++iphi) {
+          double phi = jet_diagram2D->GetYaxis()->GetBinCenter(iphi);
+          ghost.reset_momentum_PtYPhiM(ghost_pt, longitude, phi, 0);
+          stable_particles.push_back(ghost);
+        }
+      }// End of ghost loop
+    }
     
     // Default to no drawing this event
     flag_draw_event = false;
@@ -498,13 +523,34 @@ int main(int argc, char *argv[]) {
       int ctot_chargedconstituents = 0;
       double ctot_area = 0;
       int charm_status = 0;
+      double D0_pt = 0;
       for (fastjet::PseudoJet c : jet.constituents()) {
         // Check for D0
         if (c.has_user_info() && std::abs(c.user_info<LocalInfo>().pdg_id()) == 421) {
-          std::cout << "D0 associated with jet; pT = \033[31m" << jet.pt() << "\033[39m, (eta,phi) = (";
-          std::cout << jet.eta() << ',' << jet.phi() << ")." << std::endl;
+//          std::cout << "D0 associated with jet; pT = \033[31m" << jet.pt() << "\033[39m, (eta,phi) = (";
+//          std::cout << jet.eta() << ',' << jet.phi() << ")." << std::endl;
           charm_status = 1;
+          D0_pt = c.pt();
           flag_draw_event = true;
+          
+          // Find the D0 in the vector and delete it, so we know the D0 that weren't successfully clustered
+          bool matched = false;
+//          std::cout << "Vector size before :: " << reco_D0.size() << std::endl;
+          for (std::vector<Particle>::iterator D0_it = reco_D0.begin(); D0_it != reco_D0.end(); ++D0_it) {
+            if (std::fabs(D0_it->pT() - D0_pt) <= 1e-6 &&
+                getSquareEtaPhiDistance(c.eta(), D0_it->eta(),
+                                        c.phi(), D0_it->phi()) <= 1e-3) {
+              matched = true;
+              reco_D0.erase(D0_it);
+              break;
+            }
+          }// End of matching loop
+//          std::cout << "Vector size after :: " << reco_D0.size() << std::endl;
+          if (!matched) {
+            std::cout << "\033[31mFailed matching\033[39m on this D0!" << std::endl;
+          }
+          
+          
         }// End of D0 check
         
         // Tabulate jet area using ghost grid, fill constituent histograms
@@ -520,7 +566,7 @@ int main(int argc, char *argv[]) {
       }// End of consituent loop
       
       // Cut jet if it fails to meet the area cut
-      if (ctot_area < min_area) {
+      if (ghost_grid_area && ctot_area < min_area) {
         cout << "Full jet cut low area :: (" << ctot_area/(3.14159*jet_radius*jet_radius) << ")*pi*R_{jet}^2" << endl;
         continue;
       }
@@ -539,8 +585,32 @@ int main(int argc, char *argv[]) {
       }
       
       
+      // Tabulate jet pT
+//      std::cout << "Jet clustered with pT = \033[31m" << jet.pt() << "\033[39m!" << std::endl;
+      hist_pT_jet[0]->Fill(jet.pt());
+      
+      // Compute charged pT, with D0
+      double ch_pt = 0;
+      for (int i = 0; i < ctot_constituents; ++i) {
+        // Add to chjet pT if charged or D0
+        if (constituents_ptsort[i].has_user_info() &&
+            (constituents_ptsort[i].user_info<LocalInfo>().isCharged() ||
+             std::abs(constituents_ptsort[i].user_info<LocalInfo>().pdg_id()) == 421)) {
+          ch_pt += constituents_ptsort[i].pt();
+        }
+      }// End of ch pT computation
+      hist_pT_jet[1]->Fill(ch_pt);
+      if (charm_status == 1) histJetDMesonMomentum->Fill(ch_pt, D0_pt);
+      
+      // Append non-clustered D0 to the momentum hist so we can see what the pT of non-jet D0 looks like
+      for (std::vector<Particle>::iterator D0_it = reco_D0.begin(); D0_it != reco_D0.end(); ++D0_it) {
+        histJetDMesonMomentum->Fill(-5, D0_it->pT());
+      }
+      
+      
       
       //========================================================================== Compute Energy-Energy Correlators
+      
       
       // Add to energy correlator histogram--full jets
       if (jet.pt() > EEC_pt_binedge[0] && jet.pt() < EEC_pt_binedge[1]) {
@@ -567,13 +637,16 @@ int main(int argc, char *argv[]) {
                                    TMath::Hypot(mass_assumption_j, constituents_ptsort[j].pt()) ) / sq_jet_pt;
             
             // Fill inclusive
-            EEC_fulljet[0]->Fill(R_L, EEC_weight);
+            EEC_fulljet[0]->Fill(R_L, jet.pt(), EEC_weight);
+            EEC_fulljet_proj[0]->Fill(R_L, EEC_weight);
             
             // Fill D0-tagged hist if there is a D0 in the jet, otherwise fill non-D0
             if (charm_status == 1) {
-              EEC_fulljet[1]->Fill(R_L, EEC_weight);
+              EEC_fulljet[1]->Fill(R_L, jet.pt(), EEC_weight);
+              EEC_fulljet_proj[1]->Fill(R_L, EEC_weight);
             } else {
-              EEC_fulljet[2]->Fill(R_L, EEC_weight);
+              EEC_fulljet[2]->Fill(R_L, jet.pt(), EEC_weight);
+              EEC_fulljet_proj[2]->Fill(R_L, EEC_weight);
             }
             
             // Add only charged pairs to Charged EEC, but still use full jet energy as pT weight
@@ -581,13 +654,16 @@ int main(int argc, char *argv[]) {
                 !constituents_ptsort[j].has_user_info() || !constituents_ptsort[j].user_info<LocalInfo>().isCharged() ) continue;
             
             // Fill inclusive
-            EEC_charjet[0]->Fill(R_L, EEC_weight);
+            EEC_charjet[0]->Fill(R_L, jet.pt(), EEC_weight);
+            EEC_charjet_proj[0]->Fill(R_L, EEC_weight);
             
             // Fill D0-tagged hist if there is a D0 in the jet, otherwise fill non-D0
             if (charm_status == 1) {
-              EEC_charjet[1]->Fill(R_L, EEC_weight);
+              EEC_charjet[1]->Fill(R_L, jet.pt(), EEC_weight);
+              EEC_charjet_proj[1]->Fill(R_L, EEC_weight);
             } else {
-              EEC_charjet[2]->Fill(R_L, EEC_weight);
+              EEC_charjet[2]->Fill(R_L, jet.pt(), EEC_weight);
+              EEC_charjet_proj[2]->Fill(R_L, EEC_weight);
             }
             
           }// End of j consitutent loop
@@ -595,6 +671,7 @@ int main(int argc, char *argv[]) {
       }// End of EEC Fill for this jet
       
     }// End of final state full jet loop
+    
     
     
     //========================================================================== Event Display
@@ -619,7 +696,7 @@ int main(int argc, char *argv[]) {
     
     
     // plot eta-phi event display of the current event, if flagged to do so
-    if (debug || flag_draw_event) {
+    if (debug || flag_draw_event && (plot_count <= 30)) {
       jet_diagram2D->Reset();
       Int_t jet_fill_color = kWhite;
       TPaletteAxis *palette = static_cast<TPaletteAxis*>(jet_diagram2D->GetListOfFunctions()->FindObject("palette"));
@@ -696,6 +773,7 @@ int main(int argc, char *argv[]) {
       
       // Save the canvas to the display file
       canvas->Print(plotfile);
+      ++plot_count;
     }// End of event display draw
     
     
@@ -875,6 +953,9 @@ int main(int argc, char *argv[]) {
   pythia_xsec_tree->Write();
   
   
+  hist_pT_jet[0]->Write(hist_pT_jet[0]->GetName(), TObject::kOverwrite);
+  hist_pT_jet[1]->Write(hist_pT_jet[1]->GetName(), TObject::kOverwrite);
+  
   // Write histograms to file
   for (int i_particle_type = 0; i_particle_type < n_particle_type; ++i_particle_type) {
     hist_pT[i_particle_type]->Write(hist_pT[i_particle_type]->GetName(), TObject::kOverwrite);
@@ -882,12 +963,16 @@ int main(int argc, char *argv[]) {
     hist_2D[1][i_particle_type]->Write(hist_2D[1][i_particle_type]->GetName(), TObject::kOverwrite);
   }
   
+  histJetDMesonMomentum->Write(histJetDMesonMomentum->GetName(), TObject::kOverwrite);
+  
   for (int i_D0_tagged = 0; i_D0_tagged < 3; ++i_D0_tagged) {
     hist_event_jetmult[i_D0_tagged]->Write(hist_event_jetmult[i_D0_tagged]->GetName(), TObject::kOverwrite);
     hist_fulljet_constituents[i_D0_tagged]->Write(hist_fulljet_constituents[i_D0_tagged]->GetName(), TObject::kOverwrite);
     hist_charjet_constituents[i_D0_tagged]->Write(hist_charjet_constituents[i_D0_tagged]->GetName(), TObject::kOverwrite);
     EEC_fulljet[i_D0_tagged]->Write(EEC_fulljet[i_D0_tagged]->GetName(), TObject::kOverwrite);
     EEC_charjet[i_D0_tagged]->Write(EEC_charjet[i_D0_tagged]->GetName(), TObject::kOverwrite);
+    EEC_fulljet_proj[i_D0_tagged]->Write(EEC_fulljet_proj[i_D0_tagged]->GetName(), TObject::kOverwrite);
+    EEC_charjet_proj[i_D0_tagged]->Write(EEC_charjet_proj[i_D0_tagged]->GetName(), TObject::kOverwrite);
   }
   
   delete outfile;

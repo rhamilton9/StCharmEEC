@@ -48,7 +48,7 @@ const Float_t crosssec_pTHat[20] ={
 
 const bool charged_jets = false;
 const bool flavor_dependent_norm = false;
-const Float_t etajet_latecut = 0.5; // 0.6 for STAR (1.0 eta range) and 0.5 for ALICE (0.9 eta range)
+const Float_t etajet_latecut = 0.6; // 0.6 for STAR (1.0 eta range) and 0.5 for ALICE (0.9 eta range)
 
 constexpr char algo_string[20] = "anti-k_{T}";    // String for jet clustering algorithm
 constexpr char algo_string_short[5] = "a-kT";     // Shortened version
@@ -60,7 +60,7 @@ constexpr char algo_string_short[5] = "a-kT";     // Shortened version
 
 // Key generator settings, used to access relevant file. Set by user.
 const Double_t sqrt_s = 200;                       // Beam energy in GeV
-const Double_t pTmin_jet = 20;                      // Minimum pT cut for jet clustering
+const Double_t pTmin_jet = 5;                      // Minimum pT cut for jet clustering
 const Double_t jetRadius = 0.4;                     // Jet Radius -- parameter used by jet clustering algorithm
 
 // Jet and hadron pT thresholds for jet clustering.

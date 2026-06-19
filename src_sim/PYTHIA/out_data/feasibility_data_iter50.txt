@@ -1,0 +1,3 @@
+# Feasibility test for 2500 iterations
+#
+# S/N	Njet	mean p-value
